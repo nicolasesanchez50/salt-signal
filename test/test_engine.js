@@ -5,9 +5,15 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const { execFileSync } = require('child_process');
 const ENG = require(path.join(__dirname, '..', 'engine.js'));
 
-const data = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures.json'), 'utf8'));
+const FIX = path.join(__dirname, 'fixtures.json');
+if (!fs.existsSync(FIX)) {
+  // fixtures are generated from the reference engine; regenerate if absent
+  execFileSync('python3', [path.join(__dirname, '..', 'scripts', 'gen_fixtures.py')], { stdio: 'inherit' });
+}
+const data = JSON.parse(fs.readFileSync(FIX, 'utf8'));
 let checks = 0, failures = [];
 
 function eq(a, b, msg) {
