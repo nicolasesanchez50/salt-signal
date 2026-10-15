@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>SALT &amp; SIGNAL — a 2–4 player salt-trade strategy game for humans and agents</title>
+<meta name="description" content="Turn-based salt-trade strategy game playable by humans in the browser and AI agents over a documented HTTP/JSON API.">
+<style>
+  :root{
+    --bg:#0b1220; --panel:#121c2f; --panel2:#0e1728; --line:#22314b;
+    --salt:#e7eefc; --ink:#c8d4ea; --muted:#7f8ea8;
+    --p0:#4ea1ff; --p1:#ff8a5c; --p2:#63e6a8; --p3:#c98bff;
+    --gold:#ffd166; --bad:#ff5c7a; --ok:#63e6a8;
+    --radius:14px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
+    font:15px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  a{color:var(--p0)}
+  header{padding:18px 20px 6px;max-width:1080px;margin:0 auto}
+  h1{margin:0;font-size:26px;letter-spacing:.5px;color:var(--salt)}
+  h1 .amp{color:var(--gold)}
+  .sub{color:var(--muted);margin-top:4px;font-size:13.5px}
+  main{max-width:1080px;margin:0 auto;padding:10px 20px 60px;display:grid;grid-template-columns:minmax(320px,1fr) 340px;gap:20px;align-items:start}
+  @media (max-width:880px){main{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px}
+  .card h2{margin:0 0 10px;font-size:15px;letter-spacing:.4px;color:var(--salt);text-transform:uppercase;font-size:12.5px;letter-spacing:1.2px;color:var(--muted)}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  button{font:inherit;cursor:pointer;border-radius:10px;border:1px solid var(--line);
+    background:var(--panel2);color:var(--salt);padding:9px 13px;transition:.12s}
+  button:hover:not(:disabled){border-color:#3a5480;transform:translateY(-1px)}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  button.primary{background:linear-gradient(180deg,#1d3a63,#16294a);border-color:#2c4a7a}
+  button.on{outline:2px solid var(--gold);outline-offset:1px}
+  button.tiny{padding:6px 10px;font-size:12.5px}
+  input,select{font:inherit;background:var(--panel2);color:var(--salt);border:1px solid var(--line);
+    border-radius:10px;padding:9px 11px}
+  label{font-size:13px;color:var(--muted)}
+  .boardwrap{display:flex;flex-direction:column;gap:12px}
+  .banner{display:flex;justify-content:space-between;align-items:center;gap:10px;
+    background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px 14px}
+  .turnpill{display:inline-flex;align-items:center;gap:8px;font-weight:600}
+  .dot{width:11px;height:11px;border-radius:50%;display:inline-block}
+  .board{display:grid;grid-template-columns:repeat(5,1fr);gap:7px;
+    background:var(--panel2);border:1px solid var(--line);border-radius:var(--radius);padding:9px;touch-action:manipulation}
+  .cell{position:relative;aspect-ratio:1/1;border-radius:11px;border:1px solid #2a3a58;
+    background:#16233a;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    cursor:pointer;user-select:none;transition:.1s;overflow:hidden}
+  .cell .salt{font-size:22px;font-weight:700;color:var(--salt);line-height:1}
+  .cell .glyph{position:absolute;top:5px;left:7px;font-size:11px;color:var(--muted)}
+  .cell .tag{position:absolute;bottom:4px;font-size:10px;color:var(--muted);letter-spacing:.3px}
+  .cell .ownerbar{position:absolute;left:0;right:0;bottom:0;height:5px;background:#2a3a58}
+  .cell.legal{border-color:var(--gold);box-shadow:0 0 0 1px rgba(255,209,102,.35) inset}
+  .cell.legal:hover{background:#1c2c49}
+  .cell.p0{background:#12253f}.cell.p1{background:#3a2013}.cell.p2{background:#12301f}.cell.p3{background:#2a1740}
+  .cell.p0 .ownerbar{background:var(--p0)}.cell.p1 .ownerbar{background:var(--p1)}
+  .cell.p2 .ownerbar{background:var(--p2)}.cell.p3 .ownerbar{background:var(--p3)}
+  .cell.bang{animation:bang .35s ease}
+  @keyframes bang{0%{transform:scale(1)}40%{transform:scale(1.09)}100%{transform:scale(1)}}
+  .scores{display:flex;gap:10px;flex-wrap:wrap}
+  .score{flex:1 1 120px;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+  .score .nm{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:7px}
+  .score .v{font-size:24px;font-weight:700;color:var(--salt)}
+  .score .pl{font-size:11.5px;color:var(--muted)}
+  .score.me{border-color:var(--gold)}
+  .log{max-height:180px;overflow:auto;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:8px 10px;font-size:12.5px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .log div{padding:2px 0;color:var(--ink)}
+  .log .why{color:var(--muted)}
+  .hint{font-size:12.5px;color:var(--muted)}
+  .status{font-size:13px;min-height:20px}
+  .status.ok{color:var(--ok)}.status.bad{color:var(--bad)}
+  .kbd{font-family:ui-monospace,monospace;background:#0a1424;border:1px solid var(--line);border-radius:6px;padding:1px 5px;font-size:12px}
+  .win{background:linear-gradient(180deg,#1d3a2a,#16294a);border-color:#2c7a4a}
+  .footer{max-width:1080px;margin:0 auto;padding:0 20px 40px;color:var(--muted);font-size:12.5px}
+  code{background:#0a1424;border:1px solid var(--line);border-radius:6px;padding:1px 5px;font-size:12.5px}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .seg button{border:0;border-radius:0;padding:8px 12px}
+  .flexsp{flex:1}
+  dialog{border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--ink);max-width:560px}
+  dialog::backdrop{background:rgba(4,8,16,.7)}
+</style>
+</head>
+<body>
+<header>
+  <h1>SALT <span class="amp">&amp;</span> SIGNAL</h1>
+  <div class="sub">A turn-based salt-trade strategy game for humans <em>and</em> agents. Two to four captains, eight turns each, one action per turn. Highest salt on the chart wins.</div>
+</header>
+
+<main>
+  <section class="boardwrap">
+    <div class="banner">
+      <div class="turnpill" id="turnpill"><span class="dot" id="turndot"></span><span id="turntext">—</span></div>
+      <div class="row">
+        <span class="hint" id="matchlabel"></span>
+        <button class="tiny" id="btnRules">Rules</button>
+        <button class="tiny" id="btnNew">New match</button>
+      </div>
+    </div>
+
+    <div class="board" id="board" aria-label="Salt chart, 5 by 5 grid"></div>
+
+    <div class="row" id="actions">
+      <span class="hint">Action:</span>
+      <div class="seg" role="group" aria-label="Choose action">
+        <button id="actClaim" data-act="claim">Claim</button>
+        <button id="actFortify" data-act="fortify">Fortify <span class="kbd">+2</span></button>
+        <button id="actRaid" data-act="raid">Raid <span class="kbd">−2</span></button>
+      </div>
+      <span class="hint" id="actWhy"></span>
+    </div>
+
+    <div class="scores" id="scores"></div>
+
+    <div class="card" style="padding:12px">
+      <div class="row">
+        <button class="tiny" id="repFirst">⏮ start</button>
+        <button class="tiny" id="repPrev">◀ prev</button>
+        <button class="tiny" id="repNext">next ▶</button>
+        <button class="tiny" id="repLive">⏭ live</button>
+        <span class="hint" id="replabel">live</span>
+        <span class="flexsp"></span>
+        <span class="hint">match log / replay</span>
+      </div>
+      <div class="log" id="log" style="margin-top:10px"></div>
+    </div>
+  </section>
+
+  <aside style="display:flex;flex-direction:column;gap:16px">
+    <div class="card">
+      <h2>Sail</h2>
+      <div class="row" style="margin-bottom:10px">
+        <label for="selPlayers">Captains</label>
+        <select id="selPlayers"><option>2</option><option>3</option><option>4</option></select>
+        <label for="selSeat">You are</label>
+        <select id="selSeat"></select>
+      </div>
+      <div class="row" style="margin-bottom:10px">
+        <input id="inpCode" placeholder="match code (optional)" style="flex:1;min-width:150px" aria-label="Match code">
+      </div>
+      <div class="row">
+        <button class="primary" id="btnLocal">New solo match (vs bots)</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button id="btnServer">Play on the game server</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button id="btnHost">Host relay match</button>
+        <button id="btnJoin">Join with code</button>
+      </div>
+      <div class="status" id="netstatus" style="margin-top:10px"></div>
+      <div class="hint" style="margin-top:6px">Solo matches run entirely in your browser. <b>Game server</b> attaches to the bundled <code>server.py</code> (same board as any agent calling its HTTP/JSON API). <b>Relay match</b> uses a public topic so a bot elsewhere can take a seat without reaching this host — see the README.</div>
+    </div>
+
+    <div class="card">
+      <h2>Agent API</h2>
+      <div class="hint">Any seat you leave to <em>agent</em> plays over plain HTTP/JSON against the same match code. Quick look:</div>
+      <div class="log" style="margin-top:8px;max-height:150px" id="apihint"></div>
+      <div class="row" style="margin-top:8px">
+        <button class="tiny" id="btnPostApi">Copy my state as JSON</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Seats</h2>
+      <div id="seats" class="hint"></div>
+    </div>
+  </aside>
+</main>
+
+<div class="footer">
+  SALT &amp; SIGNAL · engine + API reference: <span id="repourl">see README</span> · rules in the side panel and README.
+</div>
+
+<dialog id="dlgRules">
+  <h2 style="margin-top:0">The rules, one paragraph</h2>
+  <p id="rulesP"></p>
+  <p class="hint">Salt values are printed on each cell. Fortified cells show a ✦ and can only be fortified once. A raid never drops a cell below 1.</p>
+  <div class="row" style="justify-content:flex-end"><button id="dlgOk">Close</button></div>
+</dialog>
+
+<dialog id="dlgNew">
+  <h2 style="margin-top:0" id="dnTitle">Join an online match</h2>
+  <div class="row"><label for="dnCode" style="min-width:90px">Match code</label><input id="dnCode" style="flex:1"></div>
+  <div class="row" style="margin-top:10px"><label for="dnSeat" style="min-width:90px">Your seat</label><select id="dnSeat" style="flex:1"></select></div>
+  <div class="row" style="justify-content:flex-end;margin-top:14px">
+    <button id="dnCancel">Cancel</button><button class="primary" id="dnGo">Go</button>
+  </div>
+</dialog>
+
+<script>
+/* ============================================================================
+ * 1. RULES ENGINE — byte-compatible with engine.js / engine.py in the repo.
+ *    Both are checked against test/fixtures.json (see test/test_engine.js).
+ * ========================================================================== */
+(function (root) {
+  const W = 5, H = 5, CELLS = 25;
+  const TURNS_PER_PLAYER = 8, FORTIFY_GAIN = 2, RAID_LOSS = 2;
+  const HARBORS = { 2: [0, 24], 3: [0, 4, 24], 4: [0, 4, 20, 24] };
+  function mulberry32(seed) {
+    let a = seed >>> 0;
+    return function () {
+      a = (a + 0x6d2b79f5) >>> 0; let t = a;
+      t = Math.imul(t ^ (t >>> 15), 1 | t) >>> 0;
+      t = (t + (Math.imul(t ^ (t >>> 7), 61 | t) >>> 0)) >>> 0;
+      t = (t ^ (t >>> 14)) >>> 0; return t / 4294967296;
+    };
+  }
+  function neighbors(i) {
+    const x = i % W, y = (i / W) | 0, out = [];
+    if (x > 0) out.push(i - 1); if (x < W - 1) out.push(i + 1);
+    if (y > 0) out.push(i - W); if (y < H - 1) out.push(i + W);
+    return out;
+  }
+  function newGame(seed, n) {
+    if (!(n >= 2 && n <= 4)) throw new Error('players 2-4');
+    const rng = mulberry32(seed >>> 0), salt = [];
+    for (let i = 0; i < CELLS; i++) { const r = rng(); salt.push(r < 0.15 ? 3 : r < 0.5 ? 2 : 1); }
+    const owner = new Array(CELLS).fill(-1);
+    HARBORS[n].forEach((c, p) => { owner[c] = p; });
+    return { seed: seed >>> 0, n, salt, owner, fortified: new Array(CELLS).fill(false),
+      plunder: new Array(n).fill(0), turn: 0, turnsTaken: 0, turnsPerPlayer: TURNS_PER_PLAYER,
+      over: false, winner: null, log: [] };
+  }
+  function territory(s, p) { const o = []; for (let i = 0; i < CELLS; i++) if (s.owner[i] === p) o.push(i); return o; }
+  function isAdjacentTo(s, p, i) { return neighbors(i).some((j) => s.owner[j] === p); }
+  function legal(s, p) {
+    if (p == null) p = s.turn;
+    if (s.over) return { claim: [], fortify: [], raid: [], rest: false };
+    const claim = [], fortify = [], raid = [];
+    for (let i = 0; i < CELLS; i++) {
+      if (s.owner[i] === -1 && isAdjacentTo(s, p, i)) claim.push(i);
+      if (s.owner[i] === p && !s.fortified[i]) fortify.push(i);
+      if (s.owner[i] !== -1 && s.owner[i] !== p && isAdjacentTo(s, p, i)) raid.push(i);
+    }
+    return { claim, fortify, raid, rest: !(claim.length || fortify.length || raid.length) };
+  }
+  function apply(s, action, cell) {
+    if (s.over) throw new Error('game over');
+    const p = s.turn, lg = legal(s);
+    if (action === 'claim') { if (lg.claim.indexOf(cell) === -1) throw new Error('illegal claim'); s.owner[cell] = p; }
+    else if (action === 'fortify') { if (lg.fortify.indexOf(cell) === -1) throw new Error('illegal fortify'); s.salt[cell] += FORTIFY_GAIN; s.fortified[cell] = true; }
+    else if (action === 'raid') { if (lg.raid.indexOf(cell) === -1) throw new Error('illegal raid'); const b = s.salt[cell]; s.salt[cell] = Math.max(1, b - RAID_LOSS); s.plunder[p] += Math.min(RAID_LOSS, b - s.salt[cell]); }
+    else if (action === 'rest') { if (!lg.rest) throw new Error('illegal rest'); }
+    else throw new Error('unknown action');
+    s.log.push({ turn: s.turnsTaken, player: p, action, cell });
+    s.turnsTaken += 1;
+    if (s.turnsTaken >= s.turnsPerPlayer * s.n) finish(s); else s.turn = (s.turn + 1) % s.n;
+    return s;
+  }
+  function score(s, p) { let t = s.plunder[p]; for (let i = 0; i < CELLS; i++) if (s.owner[i] === p) t += s.salt[i]; return t; }
+  function finish(s) {
+    s.over = true; const n = s.n, sc = [], cells = [];
+    for (let p = 0; p < n; p++) { sc.push(score(s, p)); cells.push(territory(s, p).length); }
+    let best = 0;
+    for (let p = 1; p < n; p++) if (sc[p] > sc[best] || (sc[p] === sc[best] && cells[p] > cells[best])) best = p;
+    s.scores = sc; s.winner = best;
+  }
+  function replay(seed, n, moves) {
+    const s = newGame(seed, n); const accepted = [];
+    for (const m of moves || []) { if (s.over) break; try { apply(s, m.action, m.cell); accepted.push(m); } catch (e) {} }
+    return { state: s, accepted };
+  }
+  root.SaltSignal = { W, H, CELLS, TURNS_PER_PLAYER, FORTIFY_GAIN, RAID_LOSS, HARBORS,
+    mulberry32, neighbors, newGame, territory, isAdjacentTo, legal, apply, score, finish, replay };
+})(window);
+
+/* ============================================================================
+ * 2. BOT — heuristic captain. Values each legal action with a light 1-ply look
+ *    (contest density for claims, exposed salt for fortify, denied salt for
+ *    raid). Chosen to be competent-but-beatable: in the shipped simulation it
+ *    loses to a well-played human and never dominates.
+ * ========================================================================== */
+const Bot = (function () {
+  const { neighbors, legal, apply, score } = window.SaltSignal;
+  function evalState(s, p) {
+    // own salt + 0.6 * frontier cells - 0.5 * best enemy adjacent mass
+    let mine = 0, frontier = 0, threat = 0;
+    for (let i = 0; i < 25; i++) {
+      if (s.owner[i] === p) {
+        mine += s.salt[i];
+        for (const j of neighbors(i)) if (s.owner[j] === -1) { frontier++; break; }
+      } else if (s.owner[i] !== -1) {
+        for (const j of neighbors(i)) if (s.owner[j] === p) threat = Math.max(threat, s.salt[i]);
+      }
+    }
+    return mine + 0.6 * frontier - 0.5 * threat;
+  }
+  function choose(s) {
+    const p = s.turn, lg = legal(s);
+    const opts = [];
+    for (const c of lg.claim) opts.push(['claim', c]);
+    for (const c of lg.fortify) opts.push(['fortify', c]);
+    for (const c of lg.raid) opts.push(['raid', c]);
+    if (!opts.length) return ['rest', -1];
+    let best = null, bestV = -1e9;
+    for (const [a, c] of opts) {
+      // full snapshot incl. log/winner/scores so lookahead cannot pollute state
+      const snap = { salt: s.salt.slice(), owner: s.owner.slice(), fortified: s.fortified.slice(),
+        plunder: s.plunder.slice(), log: s.log.slice(), turn: s.turn, turnsTaken: s.turnsTaken,
+        n: s.n, over: s.over, turnsPerPlayer: s.turnsPerPlayer, winner: s.winner, scores: s.scores };
+      let v;
+      try { apply(s, a, c); v = evalState(s, p); } catch (e) { v = -1e9; }
+      s.salt = snap.salt; s.owner = snap.owner; s.fortified = snap.fortified; s.plunder = snap.plunder;
+      s.log = snap.log; s.turn = snap.turn; s.turnsTaken = snap.turnsTaken; s.over = snap.over;
+      s.winner = snap.winner; s.scores = snap.scores;
+      const tie = { claim: 3, fortify: 2, raid: 1, rest: 0 }[a];
+      v += tie * 0.001; // stable tiebreak
+      if (v > bestV) { bestV = v; best = [a, c]; }
+    }
+    return best || ['rest', -1];
+  }
+  return { choose, evalState };
+})();
+
+/* ============================================================================
+ * 3. APP
+ * ========================================================================== */
+const ENG = window.SaltSignal;
+const $ = (id) => document.getElementById(id);
+const PCOL = ['var(--p0)', 'var(--p1)', 'var(--p2)', 'var(--p3)'];
+const PNAME = ['Blue', 'Ember', 'Jade', 'Violet'];
+
+const App = {
+  mode: 'local',      // 'local' | 'online'
+  transport: 'relay', // 'relay' (ntfy.sh) | 'server' (bundled server.py)
+  serverUrl: null,
+  code: null,
+  mySeat: 0,
+  players: 2,
+  seed: 0,
+  moves: [],          // accepted moves in order
+  state: null,
+  action: 'claim',
+  busy: false,
+  scrub: null,        // index into moves for replay; null = live
+  pollTimer: null,
+  botTimer: null,
+  lastId: null,
+  seen: new Set(),    // ntfy message ids already applied
+  agentSeats: [],     // seats controlled by agents in online mode
+};
+
+/* ---- URL hash: #code=XXXX&seat=1&players=3 ------------------------------ */
+function readHash() {
+  const h = new URLSearchParams((location.hash || '').replace(/^#/, ''));
+  return { code: h.get('code'), seat: h.get('seat'), players: h.get('players'), server: h.get('server') };
+}
+function readQuery() {
+  const h = new URLSearchParams((location.search || '').replace(/^\?/, ''));
+  return { server: h.get('server'), seat: h.get('seat'), players: h.get('players') };
+}
+function writeHash() {
+  const p = new URLSearchParams();
+  if (App.mode === 'online' && App.transport === 'relay' && App.code) p.set('code', App.code);
+  if (App.mode === 'online' && App.transport === 'server') p.set('server', '1');
+  p.set('seat', String(App.mySeat)); p.set('players', String(App.players));
+  location.hash = p.toString();
+}
+
+/* ---- match code -> deterministic seed ----------------------------------- */
+function seedFromCode(code) {
+  let h = 2166136261 >>> 0;
+  const s = 'saltsignal:' + code.toUpperCase();
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+  return h >>> 0;
+}
+function topicFor(code) { return 'saltsignal-' + code.toUpperCase(); }
+function newCode() {
+  const A = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; let s = '';
+  for (let i = 0; i < 5; i++) s += A[(Math.random() * A.length) | 0];
+  return s;
+}
+
+/* ---- state helpers ------------------------------------------------------ */
+function rebuild() {
+  const r = ENG.replay(App.seed, App.players, App.moves);
+  App.state = r.state;
+  return App.state;
+}
+function viewState() { // honours replay scrubbing
+  if (App.scrub == null) return App.state;
+  return ENG.replay(App.seed, App.players, App.moves.slice(0, App.scrub)).state;
+}
+function applyLocal(action, cell) {
+  try { ENG.apply(App.state, action, cell); App.moves.push({ action, cell, player: App.state.log[App.state.log.length - 1].player }); return true; }
+  catch (e) { return false; }
+}
+
+/* ---- rendering ---------------------------------------------------------- */
+function render() {
+  const s = viewState();
+  const live = App.scrub == null;
+  const myTurn = live && !s.over && s.turn === App.mySeat && (App.mode === 'local' || !App.agentSeats.includes(s.turn));
+  const lg = ENG.legal(s, s.turn);
+  const board = $('board'); board.innerHTML = '';
+  const legalCells = myTurn ? lg[App.action] : [];
+  for (let i = 0; i < 25; i++) {
+    const d = document.createElement('div');
+    d.className = 'cell' + (s.owner[i] >= 0 ? ' p' + s.owner[i] : '');
+    if (legalCells.indexOf(i) !== -1) d.className += ' legal';
+    d.dataset.cell = i;
+    const g = s.owner[i] >= 0 ? '<div class="ownerbar"></div>' : '';
+    const f = s.fortified[i] ? '<div class="glyph">✦</div>' : '';
+    let tag = '';
+    if (s.owner[i] >= 0 && s.owner[i] !== App.mySeat) tag = PNAME[s.owner[i]];
+    d.innerHTML = f + '<div class="salt">' + s.salt[i] + '</div>' + (tag ? '<div class="tag">' + tag + '</div>' : '') + g;
+    if (myTurn && legalCells.indexOf(i) !== -1) d.onclick = () => humanMove(App.action, i);
+    board.appendChild(d);
+  }
+  // turn pill
+  const td = $('turndot'), tt = $('turntext');
+  if (s.over) {
+    td.style.background = 'var(--gold)';
+    tt.textContent = (s.winner === App.mySeat ? 'You win! ' : PNAME[s.winner] + ' wins. ') +
+      'Final: ' + s.scores.map((v, p) => PNAME[p] + ' ' + v).join(' · ');
+  } else {
+    td.style.background = PCOL[s.turn];
+    const who = s.turn === App.mySeat ? 'your' : PNAME[s.turn] + "'s";
+    tt.textContent = 'Turn ' + (s.turnsTaken + 1) + '/' + (s.turnsPerPlayer * s.n) + ' — ' + who + ' move' +
+      (App.mode === 'online' && App.agentSeats.includes(s.turn) ? ' (agent)' : '');
+  }
+  // action buttons enable/disable + why
+  [['actClaim', 'claim'], ['actFortify', 'fortify'], ['actRaid', 'raid']].forEach(([id, a]) => {
+    const b = $(id); b.disabled = !myTurn || !lg[a].length; b.classList.toggle('on', App.action === a);
+  });
+  const amap = { claim: 'take an open cell next to your territory', fortify: 'add +2 salt to one of your cells (once each)', raid: 'cut 2 salt from an enemy cell beside yours' };
+  $('actWhy').textContent = myTurn ? (lg[App.action].length ? 'click a glowing cell to ' + amap[App.action] : 'no legal ' + App.action + ' — pick another action') : '';
+  // scores
+  const sc = $('scores'); sc.innerHTML = '';
+  for (let p = 0; p < s.n; p++) {
+    const el = document.createElement('div');
+    el.className = 'score' + (p === App.mySeat ? ' me' : '');
+    const val = ENG.score(s, p);
+    el.innerHTML = '<div class="nm"><span class="dot" style="background:' + PCOL[p] + '"></span>' + PNAME[p] +
+      (p === App.mySeat ? ' (you)' : (App.mode === 'online' && App.agentSeats.includes(p) ? ' (agent)' : ' (bot)')) +
+      '</div><div class="v">' + val + '</div><div class="pl">cells ' + ENG.territory(s, p).length + ' · plunder ' + s.plunder[p] + '</div>';
+    sc.appendChild(el);
+  }
+  // log
+  const log = $('log');
+  const upto = App.scrub == null ? App.moves.length : App.scrub;
+  log.innerHTML = '';
+  App.moves.slice(0, upto).forEach((m, k) => {
+    const d = document.createElement('div');
+    const cellTxt = m.cell >= 0 ? ' cell ' + (m.cell % 5 + 1) + ',' + (((m.cell / 5) | 0) + 1) : '';
+    d.innerHTML = '<span style="color:' + PCOL[m.player] + '">' + PNAME[m.player] + '</span> ' + m.action + cellTxt +
+      (k >= App.moves.length - 1 && App.scrub == null ? ' <span class="why">(latest)</span>' : '');
+    log.appendChild(d);
+  });
+  if (!App.moves.length) log.innerHTML = '<div class="why">No moves yet.</div>';
+  $('replabel').textContent = App.scrub == null ? 'live' : ('replay ' + App.scrub + '/' + App.moves.length);
+  $('matchlabel').textContent = App.mode !== 'online' ? 'solo (local bots)'
+    : App.transport === 'server' ? 'server match' : ('match ' + App.code);
+  // seats panel
+  const seats = $('seats'); seats.innerHTML = '';
+  for (let p = 0; p < App.players; p++) {
+    const kind = p === App.mySeat ? 'you (browser)' : (App.mode === 'online' && App.agentSeats.includes(p) ? 'agent (HTTP/JSON)' : 'bot');
+    seats.innerHTML += '<div><span class="dot" style="background:' + PCOL[p] + '"></span> ' + PNAME[p] + ' — ' + kind + '</div>';
+  }
+}
+
+/* ---- human move --------------------------------------------------------- */
+function humanMove(action, cell) {
+  if (App.busy) return;
+  const s = App.state;
+  if (s.over || s.turn !== App.mySeat) return;
+  if (!applyLocal(action, cell)) return;
+  bump(cell);
+  if (App.mode === 'online' && App.transport === 'server') {
+    fetch(transportBase() + '/api/move', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, cell, player: App.mySeat }),
+    }).then((r) => r.json()).then(() => pollServer())
+      .catch(() => setNet('server unreachable — move kept locally only', false));
+  } else if (App.mode === 'online') {
+    publish({ action, cell, player: App.mySeat });
+  }
+  render(); afterMove();
+}
+function bump(cell) {
+  const el = document.querySelector('.cell[data-cell="' + cell + '"]');
+  if (el) { el.classList.add('bang'); setTimeout(() => el.classList.remove('bang'), 350); }
+}
+function afterMove() {
+  render();
+  if (App.state.over) return;
+  const s = App.state;
+  if (s.turn === App.mySeat) return;                       // our turn: wait for the human
+  if (App.agentSeats.includes(s.turn)) return;             // an agent/bot seat: wait for its move
+  if (App.transport === 'server') return;                  // the server plays its own bot seats
+  // Otherwise this seat is a bot. In relay mode we still bot it (so a solo host
+  // never stalls) but with a longer delay, and a real agent that announces itself
+  // takes the seat over permanently (see pollRelay -> claimSeatForAgent).
+  clearTimeout(App.botTimer);
+  const delay = App.mode === 'online' ? 3500 : 420;
+  const seat = s.turn;
+  App.botTimer = setTimeout(() => {
+    if (App.state.over || App.state.turn !== seat) return;
+    if (App.agentSeats.includes(seat)) return;
+    const mv = Bot.choose(App.state);
+    const before = App.state.log.length;
+    applyLocal(mv[0], mv[1] < 0 ? 0 : mv[1]);
+    if (App.state.log.length > before) {
+      const last = App.state.log[App.state.log.length - 1];
+      bump(last.cell);
+      if (App.mode === 'online') publish({ action: last.action, cell: last.cell, player: last.player, bot: true }, true);
+    }
+    afterMove();
+  }, delay);
+}
+function claimSeatForAgent(seat) {
+  if (seat === App.mySeat) return;
+  if (App.agentSeats.indexOf(seat) === -1) { App.agentSeats.push(seat); }
+  clearTimeout(App.botTimer);
+}
+
+/* ---- transports ----------------------------------------------------------
+ * server : talk to the bundled reference game server (server.py). It is the
+ *          single authority for the match, so a human and any number of agents
+ *          share one board with no ordering hazards.
+ * relay  : ntfy.sh public topic, used only for cross-machine matches where the
+ *          agent cannot reach our host. Rate-limited by the public service
+ *          (250 msg/day, ~1 req/5 s per IP), so it is best-effort, not primary.
+ * ------------------------------------------------------------------------- */
+const RELAY = 'https://ntfy.sh';
+function transportBase() { return App.serverUrl ? App.serverUrl.replace(/\/$/, '') : ''; }
+
+function publish(msg, silent) {
+  if (App.mode !== 'online') return;
+  if (App.transport === 'server') return; // server state is authoritative; no publish needed
+  const body = JSON.stringify(Object.assign({ v: 1, code: App.code, by: App.mySeat, at: Date.now() }, msg));
+  fetch(RELAY + '/' + topicFor(App.code), { method: 'POST', body })
+    .then((r) => { if (!silent) setNet(r.ok ? 'sent ' + msg.action : 'relay busy (' + r.status + ') — retrying', r.ok); })
+    .catch(() => { if (!silent) setNet('relay unreachable — check your connection', false); });
+}
+
+/* server transport: GET /api/state and reconcile the local view */
+function pollServer() {
+  fetch(transportBase() + '/api/state').then((r) => r.json()).then((v) => {
+    App.seed = v.seed; App.players = v.players;
+    const next = (v.moves || []).map((m) => ({ player: m.player, action: m.action, cell: m.cell }));
+    if (JSON.stringify(next) !== JSON.stringify(App.moves)) {
+      const before = App.moves.length;
+      App.moves = next; App.scrub = null; rebuild(); render(); afterMove();
+      if (next.length > before) { const last = next[next.length - 1]; bump(last.cell); }
+    } else { render(); }
+    if (v.botSeats && v.botSeats.length) App.agentSeats = v.botSeats.slice();
+    setNet('server · ' + App.moves.length + '/' + (v.turnsTotal || '?') + ' moves' + (v.over ? ' · over' : ''), true);
+  }).catch(() => setNet('server unreachable at ' + transportBase(), false));
+}
+
+function pollRelay() {
+  const since = App.lastId || 'all';
+  fetch(RELAY + '/' + topicFor(App.code) + '/json?poll=1&since=' + encodeURIComponent(since))
+    .then((r) => r.text())
+    .then((txt) => {
+      const msgs = [];
+      txt.split('\n').filter(Boolean).forEach((line) => {
+        let j; try { j = JSON.parse(line); } catch (e) { return; }
+        if (j.event !== 'message' || !j.message) return;
+        if (App.seen.has(j.id)) return;
+        App.seen.add(j.id); App.lastId = j.id;
+        let m; try { m = JSON.parse(j.message); } catch (e) { return; }
+        if (m.code && App.code && m.code.toUpperCase() !== App.code.toUpperCase()) return;
+        if (m.kind === 'hello' && m.by != null) { claimSeatForAgent(m.by); return; }
+        if (m.player === App.mySeat || !m.action) return;   // our own moves are already local
+        msgs.push(m);
+      });
+      // The relay is not a strictly-ordered log: two messages posted in the same
+      // second can arrive in either order. Buffer incoming moves and apply them
+      // greedily in TURN order so reordering cannot silently drop a legal move.
+      App.pending = (App.pending || []).concat(msgs);
+      let applied = 0, progress = true;
+      while (progress && !App.state.over) {
+        progress = false;
+        const need = App.state.turn;
+        const idx = App.pending.findIndex((m) => m.player === need);
+        if (idx !== -1) {
+          const m = App.pending.splice(idx, 1)[0];
+          if (applyLocal(m.action, m.cell)) { applied++; bump(m.cell); }
+          progress = true;
+        }
+      }
+      if (applied) { render(); afterMove(); }
+      setNet('relay · ' + App.moves.length + ' moves', true);
+    })
+    .catch(() => setNet('relay unreachable', false));
+}
+
+function pollOnce() {
+  if (App.mode !== 'online') return;
+  if (App.transport === 'server') pollServer(); else pollRelay();
+}
+function startPolling() { stopPolling(); App.pollTimer = setInterval(pollOnce, App.transport === 'server' ? 1100 : 5200); }
+function stopPolling() { if (App.pollTimer) clearInterval(App.pollTimer); App.pollTimer = null; }
+function setNet(t, ok) { const el = $('netstatus'); el.textContent = t; el.className = 'status ' + (ok ? 'ok' : 'bad'); }
+
+/* ---- setup flows -------------------------------------------------------- */
+function startLocal() {
+  stopPolling(); clearTimeout(App.botTimer);
+  App.mode = 'local'; App.code = null;
+  App.players = +$('selPlayers').value;
+  App.mySeat = +$('selSeat').value;
+  App.seed = (Math.random() * 4294967295) >>> 0;
+  App.moves = []; App.scrub = null; App.agentSeats = [];
+  rebuild(); writeHash(); render(); afterMove();
+}
+function hostOnline() {
+  App.players = +$('selPlayers').value;
+  App.mySeat = +$('selSeat').value;
+  App.code = newCode();
+  App.agentSeats = [];
+  goOnline();
+}
+function joinOnline() {
+  const c = ($('inpCode').value || '').trim().toUpperCase();
+  if (!c) { setNet('enter a match code first', false); return; }
+  $('dnTitle').textContent = 'Join ' + c;
+  $('dnCode').value = c;
+  const sel = $('dnSeat'); sel.innerHTML = '';
+  for (let p = 0; p < App.players; p++) { const o = document.createElement('option'); o.value = p; o.textContent = PNAME[p]; sel.appendChild(o); }
+  $('dlgNew').showModal();
+}
+function goOnline(joinCode) {
+  stopPolling(); clearTimeout(App.botTimer);
+  App.mode = 'online'; App.transport = 'relay';
+  App.code = (joinCode || App.code).toUpperCase();
+  App.seed = seedFromCode(App.code);
+  App.moves = []; App.scrub = null; App.seen = new Set(); App.lastId = null;
+  rebuild(); writeHash(); render();
+  setNet('online (relay) · waiting for moves', true);
+  startPolling();
+  // announce presence so others (and agents) see traffic
+  fetch(RELAY + '/' + topicFor(App.code), { method: 'POST', body: JSON.stringify({ v: 1, code: App.code, kind: 'hello', by: App.mySeat, at: Date.now() }) }).catch(() => {});
+  if (!App.state.over && App.state.turn !== App.mySeat) afterMove();
+}
+/* attach to the bundled reference server (server.py) — authoritative match */
+function goServer(serverUrl) {
+  stopPolling(); clearTimeout(App.botTimer);
+  App.mode = 'online'; App.transport = 'server';
+  App.serverUrl = serverUrl || App.serverUrl || (location.origin.indexOf('http') === 0 ? location.origin : 'http://127.0.0.1:8788');
+  App.moves = []; App.scrub = null; App.pending = [];
+  rebuild(); writeHash(); render();
+  setNet('connecting to ' + App.serverUrl + ' …', true);
+  pollServer(); startPolling();
+}
+
+/* ---- wiring ------------------------------------------------------------- */
+function syncSeatSelect() {
+  const n = +$('selPlayers').value, sel = $('selSeat'); const cur = sel.value;
+  sel.innerHTML = '';
+  for (let p = 0; p < n; p++) { const o = document.createElement('option'); o.value = p; o.textContent = PNAME[p]; sel.appendChild(o); }
+  sel.value = (cur !== '' && +cur < n) ? cur : '0';
+}
+function initRulesText() {
+  $('rulesP').textContent = 'On a 5×5 salt chart each cell holds 1–3 salt. Every captain starts owning one harbour corner. On your turn you take exactly ONE action: CLAIM an unowned cell orthogonally adjacent to your territory, FORTIFY one of your own cells (+2 salt, once per cell), or RAID an enemy cell adjacent to your territory (−2 salt, never below 1; the salt is destroyed, not stolen). Every cell gets 8 turns; when the turns run out, the highest total salt (cells you own + plunder) wins. Ties break on most cells owned.';
+}
+function apiHint() {
+  $('apihint').innerHTML =
+    '<b>Game server</b> (server.py)<br>' +
+    'GET  <span style="color:var(--p0)">/api/state</span> · GET <span style="color:var(--p0)">/api/rules</span><br>' +
+    'POST <span style="color:var(--p0)">/api/move</span> {action,cell,player}<br>' +
+    '<hr style="border-color:#22314b;margin:8px 0">' +
+    '<b>Relay match</b> (ntfy.sh, topic = saltsignal-&lt;CODE&gt;)<br>' +
+    'GET  <span style="color:var(--p0)">ntfy.sh/&lt;topic&gt;/json?poll=1&amp;since=all</span><br>' +
+    'POST <span style="color:var(--p0)">ntfy.sh/&lt;topic&gt;</span> {action,cell,player}';
+}
+function init() {
+  initRulesText(); apiHint(); syncSeatSelect();
+  const h = readHash();
+  if (h.players) { $('selPlayers').value = h.players; syncSeatSelect(); }
+  if (h.seat) $('selSeat').value = h.seat;
+  $('selPlayers').onchange = syncSeatSelect;
+  $('btnLocal').onclick = startLocal;
+  $('btnServer').onclick = () => { App.mySeat = +$('selSeat').value; goServer(); };
+  $('btnHost').onclick = hostOnline;
+  $('btnJoin').onclick = joinOnline;
+  $('btnNew').onclick = () => { stopPolling(); clearTimeout(App.botTimer); $('dlgNew').close(); startLocal(); };
+  $('btnRules').onclick = () => $('dlgRules').showModal();
+  $('dlgOk').onclick = () => $('dlgRules').close();
+  $('dnCancel').onclick = () => $('dlgNew').close();
+  $('dnGo').onclick = () => { const c = $('dnCode').value.trim().toUpperCase(); const seat = +$('dnSeat').value; App.mySeat = seat; $('dlgNew').close(); goOnline(c); };
+  document.querySelectorAll('#actions button[data-act]').forEach((b) => { b.onclick = () => { App.action = b.dataset.act; render(); }; });
+  $('repFirst').onclick = () => { App.scrub = 0; render(); };
+  $('repPrev').onclick = () => { App.scrub = Math.max(0, (App.scrub == null ? App.moves.length : App.scrub) - 1); render(); };
+  $('repNext').onclick = () => { const n = (App.scrub == null ? App.moves.length : App.scrub) + 1; App.scrub = n >= App.moves.length ? null : n; render(); };
+  $('repLive').onclick = () => { App.scrub = null; render(); };
+  $('btnPostApi').onclick = () => {
+    const s = App.state;
+    const obj = { code: App.code, seed: App.seed, players: App.players, turn: s.turn,
+      moves: App.moves.map((m) => ({ player: m.player, action: m.action, cell: m.cell })),
+      legal: ENG.legal(s, s.turn), scores: Array.from({ length: App.players }, (_, p) => ENG.score(s, p)) };
+    navigator.clipboard && navigator.clipboard.writeText(JSON.stringify(obj, null, 2));
+    setNet('state JSON copied to clipboard', true);
+  };
+  // deep links: ?server=1 (game server), #code=XXXX (relay match)
+  const q = readQuery();
+  if (q.server) { App.mySeat = q.seat ? +q.seat : (h.seat ? +h.seat : 0); App.serverUrl = location.origin.indexOf('http') === 0 ? location.origin : 'http://127.0.0.1:8788'; goServer(App.serverUrl); }
+  else if (h.server) { App.mySeat = h.seat ? +h.seat : 0; goServer(); }
+  else if (h.code) { App.mySeat = h.seat ? +h.seat : 0; goOnline(h.code); }
+  else { startLocal(); }
+}
+window.addEventListener('DOMContentLoaded', init);
+// expose internals for the automated test harness (test/test_ui.js)
+Object.assign(App, { render, afterMove, rebuild, humanMove, goOnline, startLocal, viewState });
+window.SaltApp = App;
+window.SaltBot = Bot;
+</script>
+</body>
+</html>
